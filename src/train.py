@@ -18,7 +18,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 print("Training model...")
-
+mlflow.set_tracking_uri("file:./mlruns")
 mlflow.set_experiment("MLOpsDemo")
 
 with mlflow.start_run():
