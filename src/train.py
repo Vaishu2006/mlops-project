@@ -8,14 +8,22 @@ from dotenv import load_dotenv
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 
-# ✅ Load .env for local dev
+# Load .env for local dev
 load_dotenv()
 
-# ✅ Best Fix: env variable → SQLite fallback (never file store)
+# MLflow setup — artifact root as absolute path to avoid Windows path issues on Linux CI
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
+ARTIFACT_ROOT = os.path.abspath("./mlruns")
+
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
-# ✅ Configurable via env
+# Create experiment with explicit artifact location if it doesn't exist
+exp = mlflow.get_experiment_by_name("MLOpsDemo")
+if exp is None:
+    mlflow.create_experiment("MLOpsDemo", artifact_location=f"file://{ARTIFACT_ROOT}")
+mlflow.set_experiment("MLOpsDemo")
+
+# Configurable via env
 N_ESTIMATORS = int(os.getenv("N_ESTIMATORS", 100))
 
 print("Loading dataset...")
@@ -31,40 +39,37 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 print("Training model...")
 
-# ✅ Auto-create models/ directory if missing
+# Auto-create models/ directory if missing
 os.makedirs("models", exist_ok=True)
-
-mlflow.set_experiment("MLOpsDemo")
 
 with mlflow.start_run():
 
     model = RandomForestClassifier(
         n_estimators=N_ESTIMATORS,
-        random_state=42        # ✅ Reproducible results
+        random_state=42
     )
 
     model.fit(X_train, y_train)
 
     accuracy = model.score(X_test, y_test)
 
-    # ✅ Log all params
+    # Log params
     mlflow.log_param("n_estimators", N_ESTIMATORS)
     mlflow.log_param("random_state", 42)
     mlflow.log_param("test_size", 0.2)
 
     mlflow.log_metric("accuracy", accuracy)
 
-    # ✅ Log model to MLflow registry
+    # Log model to MLflow (no registered_model_name — requires remote server)
     mlflow.sklearn.log_model(
         model,
-        artifact_path="model",
-        registered_model_name="MLOpsDemoModel"  # ✅ Auto-registers in Model Registry
+        artifact_path="model"
     )
 
-    # ✅ Also save locally as .pkl
+    # Save locally as .pkl and track in MLflow
     model_path = "models/model.pkl"
     joblib.dump(model, model_path)
-    mlflow.log_artifact(model_path)  # ✅ Also track .pkl in MLflow
+    mlflow.log_artifact(model_path)
 
     print(f"✅ Accuracy  : {accuracy:.4f}")
     print(f"✅ Tracking  : {MLFLOW_TRACKING_URI}")
